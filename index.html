@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TutorLink</title>
+    <!-- Use Tailwind CSS via CDN for rapid styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Import the Inter font for a modern look */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .form-checkbox, .form-radio {
+            cursor: pointer;
+        }
+        /* Custom scrollbar for the chatbox */
+        .chat-box {
+            max-height: 400px;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #4B5563 #1F2937;
+        }
+        .chat-box::-webkit-scrollbar {
+            width: 8px;
+        }
+        .chat-box::-webkit-scrollbar-track {
+            background: #1F2937;
+        }
+        .chat-box::-webkit-scrollbar-thumb {
+            background-color: #4B5563;
+            border-radius: 4px;
+            border: 2px solid #1F2937;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white flex flex-col items-center justify-center p-4 font-sans antialiased min-h-screen">
+
+    <!-- The main container where all content will be rendered dynamically by JavaScript -->
+    <div id="root"></div>
+
+    <script type="text/javascript">
+        // The core logic of the application
+        document.addEventListener('DOMContentLoaded', () => {
+
+            const root = document.getElementById('root');
+
+            // --- State Management ---
+            let isLogin = true; // Is the user on the login or signup page?
+            let isAuth = false; // Is the user authenticated? (i.e., logged in)
+            let userRole = null; // Can be 'student', 'tutor', or null
+            let isTutorProfileComplete = false;
+            let isStudentProfileComplete = false;
+            let isLoading = false;
+            let successMessage = '';
+            let errorMessage = '';
+            let tutorList = [];
+            let studentListForTutor = [];
+            // NEW STATE VARIABLES FOR THE TUTOR PROFILE AND CHAT
+            let selectedTutor = null;
+            let chatMessages = [];
+
+            // In-memory data stores to simulate the backend database
+            let mockTutors = [
+                { id: '1', name: 'Alice Smith', bio: 'A dedicated tutor with a passion for making complex topics simple. I believe every student has the potential to excel with the right guidance.', contactNumber: '9876543210', experience: 5, specializations: ['Math', 'Physics'], applicableGrades: ['School Students', 'College Students'], rate_inr_monthly: 2500 },
+                { id: '2', name: 'Bob Johnson', bio: 'Experienced in helping students craft compelling essays and understand historical context. Let\'s explore the world of literature and history together!', contactNumber: '9876543211', experience: 3, specializations: ['English', 'History'], applicableGrades: ['School Students'], rate_inr_monthly: 1800 },
+                { id: '3', name: 'Charlie Brown', bio: 'I specialize in Computer Science, from foundational principles to advanced algorithms. My goal is to equip students with the skills needed for the digital age.', contactNumber: '9876543212', experience: 7, specializations: ['Computer Science', 'Math'], applicableGrades: ['College Students'], rate_inr_monthly: 3500 },
+                { id: '4', name: 'Diana Prince', bio: 'Making science fun and accessible for everyone. I help students grasp key concepts through engaging and practical examples.', contactNumber: '9876543213', experience: 2, specializations: ['Science'], applicableGrades: ['School Students'], rate_inr_monthly: 1500 },
+                { id: '5', name: 'Ethan Hunt', bio: 'With over a decade of experience, I am committed to helping students master the toughest topics in Math and Physics. Let\'s work on those challenging problems together.', contactNumber: '9876543214', experience: 10, specializations: ['Math', 'Physics'], applicableGrades: ['College Students'], rate_inr_monthly: 4000 },
+                { id: '6', name: 'Fiona Miller', bio: 'Whether it\'s writing a great paper or understanding complex historical events, I am here to help. My approach is tailored to each student\'s learning style.', contactNumber: '9876543215', experience: 4, specializations: ['English', 'History'], applicableGrades: ['School Students', 'College Students'], rate_inr_monthly: 2200 },
+                { id: '7', name: 'George Weasley', bio: 'As a passionate Computer Science tutor, I guide students through everything from coding basics to building full-scale applications. Let\'s get coding!', contactNumber: '9876543216', experience: 6, specializations: ['Computer Science'], applicableGrades: ['College Students'], rate_inr_monthly: 3000 },
+                { id: '8', name: 'Hannah Montana', bio: 'My goal is to make learning an enjoyable experience. I offer tutoring in Science and English, focusing on building a strong foundation of knowledge.', contactNumber: '9876543217', experience: 1, specializations: ['Science', 'English'], applicableGrades: ['School Students'], rate_inr_monthly: 1200 },
+                { id: '9', name: 'Isaac Newton', bio: 'I have a deep understanding of Physics and Math and I am ready to share my knowledge. I specialize in preparing students for competitive exams and advanced coursework.', contactNumber: '9876543218', experience: 12, specializations: ['Physics', 'Math'], applicableGrades: ['College Students'], rate_inr_monthly: 5000 },
+                { id: '10', name: 'Jane Austen', bio: 'I help students unlock their creative potential through writing and a deeper appreciation for history. Let\'s make every sentence count!', contactNumber: '9876543219', experience: 8, specializations: ['English', 'History'], applicableGrades: ['School Students', 'College Students'], rate_inr_monthly: 3200 },
+            ];
+            let mockStudents = [
+                { id: 's1', name: 'Raj Kumar', contactNumber: '9911223344', educationalStatus: 'school', studyHelp: 'Looking for a tutor for high school Math and Physics.', sessionPreference: 'online', location: '' },
+                { id: 's2', name: 'Priya Sharma', contactNumber: '9922334455', educationalStatus: 'college', studyHelp: 'Need help with advanced Computer Science algorithms.', sessionPreference: 'online', location: '' },
+                { id: 's3', name: 'Amit Singh', contactNumber: '9933445566', educationalStatus: 'school', studyHelp: 'Seeking assistance with English literature homework.', sessionPreference: 'offline', location: 'New Delhi, India' },
+                { id: 's4', name: 'Deepa Patel', contactNumber: '9944556677', educationalStatus: 'college', studyHelp: 'Need a tutor for a complex linear algebra problem in Math.', sessionPreference: 'online', location: '' },
+                { id: 's5', name: 'Vikram Mehta', contactNumber: '9955667788', educationalStatus: 'school', studyHelp: 'Looking for a Science tutor to prepare for an exam.', sessionPreference: 'online', location: '' },
+                { id: 's6', name: 'Geeta Rao', contactNumber: '9966778899', educationalStatus: 'college', studyHelp: 'Need help with a history research paper.', sessionPreference: 'online', location: '' },
+            ];
+
+            // Form data objects to store user input
+            let tutorForm = {
+                name: '',
+                contactNumber: '',
+                experience: '',
+                specializations: [],
+                applicableGrades: [],
+                rate_inr_monthly: '',
+            };
+
+            let studentForm = {
+                name: '',
+                contactNumber: '',
+                educationalStatus: 'school',
+                studyHelp: '',
+                sessionPreference: 'online',
+                location: '',
+            };
+
+            // --- State Persistence with localStorage ---
+            const saveState = () => {
+                localStorage.setItem('isAuth', JSON.stringify(isAuth));
+                localStorage.setItem('userRole', JSON.stringify(userRole));
+                localStorage.setItem('isTutorProfileComplete', JSON.stringify(isTutorProfileComplete));
+                localStorage.setItem('isStudentProfileComplete', JSON.stringify(isStudentProfileComplete));
+                if (userRole === 'tutor') {
+                    localStorage.setItem('tutorForm', JSON.stringify(tutorForm));
+                }
+                if (userRole === 'student') {
+                    localStorage.setItem('studentForm', JSON.stringify(studentForm));
+                }
+            };
+
+            const loadState = () => {
+                const storedIsAuth = localStorage.getItem('isAuth');
+                const storedUserRole = localStorage.getItem('userRole');
+                const storedTutorProfileComplete = localStorage.getItem('isTutorProfileComplete');
+                const storedStudentProfileComplete = localStorage.getItem('isStudentProfileComplete');
+                const storedTutorForm = localStorage.getItem('tutorForm');
+                const storedStudentForm = localStorage.getItem('studentForm');
+                
+                if (storedIsAuth) {
+                    isAuth = JSON.parse(storedIsAuth);
+                }
+                if (storedUserRole) {
+                    userRole = JSON.parse(storedUserRole);
+                }
+                if (storedTutorProfileComplete) {
+                    isTutorProfileComplete = JSON.parse(storedTutorProfileComplete);
+                }
+                if (storedStudentProfileComplete) {
+                    isStudentProfileComplete = JSON.parse(storedStudentProfileComplete);
+                }
+                if (storedTutorForm) {
+                    tutorForm = JSON.parse(storedTutorForm);
+                }
+                if (storedStudentForm) {
+                    studentForm = JSON.parse(storedStudentForm);
+                }
+            };
+            
+            // --- MOCK BACKEND ---
+            // This function intercepts API calls and returns mock data.
+            const mockFetch = (url, options) => {
+                return new Promise(resolve => {
+                    setTimeout(() => {
+                        let response;
+                        if (url.includes('/api/register/student') && options.method === 'POST') {
+                            const data = JSON.parse(options.body);
+                            mockStudents.push(data);
+                            console.log('Mock Backend: Registered new student:', data);
+                            response = {
+                                ok: true,
+                                json: () => Promise.resolve({ success: true, message: "Student profile registered successfully." })
+                            };
+                        } else if (url.includes('/api/register/tutor') && options.method === 'POST') {
+                            const data = JSON.parse(options.body);
+                            mockTutors.push(data);
+                            console.log('Mock Backend: Registered new tutor:', data);
+                            response = {
+                                ok: true,
+                                json: () => Promise.resolve({ success: true, message: "Tutor profile registered successfully." })
+                            };
+                        } else if (url.includes('/api/tutors')) {
+                            const params = new URLSearchParams(url.split('?')[1]);
+                            const studentStatus = params.get('studentStatus');
+                            let filteredTutors = mockTutors;
+                            if (studentStatus) {
+                                // Filter tutors based on the student's educational status
+                                filteredTutors = mockTutors.filter(tutor => {
+                                    const applicableGrade = studentStatus === 'school' ? 'School Students' : 'College Students';
+                                    return tutor.applicableGrades.includes(applicableGrade);
+                                });
+                            }
+                            response = {
+                                ok: true,
+                                json: () => Promise.resolve(filteredTutors)
+                            };
+                        } else if (url.includes('/api/students')) {
+                            const params = new URLSearchParams(url.split('?')[1]);
+                            const specializations = params.get('specializations')?.split(',') || [];
+                            let filteredStudents = mockStudents;
+                            if (specializations.length > 0) {
+                                filteredStudents = mockStudents.filter(student => {
+                                    // Check if the student's studyHelp string contains any of the tutor's specializations (case-insensitive)
+                                    const lowerStudyHelp = student.studyHelp.toLowerCase();
+                                    return specializations.some(spec => lowerStudyHelp.includes(spec.toLowerCase()));
+                                });
+                            }
+                            response = {
+                                ok: true,
+                                json: () => Promise.resolve(filteredStudents)
+                            };
+                        } else {
+                            response = {
+                                ok: false,
+                                status: 404,
+                                json: () => Promise.resolve({ message: "Mock endpoint not found." })
+                            };
+                        }
+                        resolve(response);
+                    }, 1000); // Simulate network latency
+                });
+            };
+
+            // --- API Call Functions ---
+            const registerProfile = async (role, data) => {
+                isLoading = true;
+                successMessage = '';
+                errorMessage = '';
+                render();
+
+                const endpoint = `/api/register/${role}`;
+                
+                try {
+                    const response = await mockFetch(endpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+
+                    const result = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(result.message || 'Failed to register profile.');
+                    }
+
+                    return true;
+                } catch (error) {
+                    errorMessage = `Failed to register profile. Please ensure the backend server is running. Error: ${error.message}`;
+                    console.error('Registration failed:', error);
+                    return false;
+                } finally {
+                    isLoading = false;
+                    render();
+                }
+            };
+            
+            const fetchTutorData = async (studentStatus) => {
+                isLoading = true;
+                successMessage = '';
+                errorMessage = '';
+                render();
+                
+                try {
+                    const response = await mockFetch(`/api/tutors?studentStatus=${studentStatus}`);
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    tutorList = await response.json();
+                    console.log('Tutor data received from backend:', tutorList);
+                } catch (error) {
+                    console.error('There was a problem with the fetch operation:', error);
+                    errorMessage = 'Failed to load tutor data from the server. Please ensure your backend is running.';
+                    tutorList = [];
+                }
+                isLoading = false;
+                render();
+            };
+
+            const fetchStudentDataForTutor = async (specializations) => {
+                isLoading = true;
+                successMessage = '';
+                errorMessage = '';
+                render();
+
+                const specializationString = specializations.join(',');
+                try {
+                    const response = await mockFetch(`/api/students?specializations=${specializationString}`);
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    studentListForTutor = await response.json();
+                    console.log('Student data received from backend:', studentListForTutor);
+                } catch (error) {
+                    console.error('There was a problem with the fetch operation:', error);
+                    errorMessage = 'Failed to load student data from the server. Please ensure your backend is running.';
+                    studentListForTutor = [];
+                }
+                isLoading = false;
+                render();
+            };
+
+            // --- UI Rendering Function ---
+            const render = () => {
+                root.innerHTML = '';
+                
+                let contentHTML = '';
+
+                if (!isAuth) {
+                    // Page 1: Authentication/Role Selection
+                    contentHTML = `
+                        <div class="flex flex-col items-center justify-center space-y-6">
+                            <h2 class="text-3xl font-bold mb-4">${isLogin ? 'Welcome Back!' : 'Join Us Today'}</h2>
+                            <div class="flex space-x-4">
+                                <button id="student-btn" class="px-6 py-3 rounded-lg font-semibold transition-colors duration-200 ${userRole === 'student' ? 'bg-blue-600 text-white shadow-lg' : 'bg-gray-700 hover:bg-gray-600 text-gray-200'}">
+                                    I am a Student
+                                </button>
+                                <button id="tutor-btn" class="px-6 py-3 rounded-lg font-semibold transition-colors duration-200 ${userRole === 'tutor' ? 'bg-blue-600 text-white shadow-lg' : 'bg-gray-700 hover:bg-gray-600 text-gray-200'}">
+                                    I am a Tutor
+                                </button>
+                            </div>
+                            ${userRole ? `
+                            <form id="auth-form" class="w-full max-w-sm mt-8">
+                                <input type="email" placeholder="Email" required class="w-full p-3 mb-4 rounded-lg bg-gray-700 text-gray-200 border border-gray-600 focus:border-blue-500 focus:outline-none transition-colors" />
+                                <input type="password" placeholder="Password" required class="w-full p-3 mb-6 rounded-lg bg-gray-700 text-gray-200 border border-gray-600 focus:border-blue-500 focus:outline-none transition-colors" />
+                                <button type="submit" class="w-full bg-green-500 text-white font-bold py-3 rounded-lg hover:bg-green-600 transition-colors duration-300" ${isLoading ? 'disabled' : ''}>
+                                    ${isLoading ? 'Loading...' : isLogin ? 'Log In' : 'Sign Up'}
+                                </button>
+                            </form>
+                            ` : ''}
+                            <div class="text-center text-gray-400 mt-4">
+                                ${isLogin ? "Don't have an account?" : "Already have an account?"}
+                                <button id="toggle-auth-btn" class="ml-2 text-blue-400 hover:text-blue-300 font-medium">
+                                    ${isLogin ? 'Sign Up' : 'Log In'}
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    // Pages for authenticated users
+                    if (userRole === 'tutor' && !isTutorProfileComplete) {
+                        // Tutor Profile Form
+                        contentHTML = `
+                            <div class="w-full max-w-2xl mx-auto space-y-6">
+                                <h2 class="text-3xl font-bold mb-4">Tutor Profile</h2>
+                                <p class="text-gray-400">Tell us a little about yourself to get started.</p>
+                                <form id="profile-form">
+                                    <div class="flex flex-col mb-4">
+                                        <label for="name" class="text-gray-300 mb-2">Your Full Name:</label>
+                                        <input type="text" id="name" name="name" value="${tutorForm.name}" required class="p-3 rounded-lg bg-gray-700 text-gray-200 border border-gray-600 focus:border-blue-500 focus:outline-none transition-colors" />
+                                    </div>
+                                    <div class="flex flex-col mb-4">
+                                        <label for="contactNumber" class="text-gray-300 mb-2">Contact Number:</label>
+                                        <input type="tel" id="contactNumber" name="contactNumber" value="${tutorForm.contactNumber}" required class="p-3 rounded-lg bg-gray-700 text-gray-200 border border-gray-600 focus:border-blue-500 focus:outline-none transition-colors" />
+                                    </div>
+                                    <div class="flex flex-col mb-4">
+                                        <label for="experience" class="text-gray-300 mb-2">Experience (in years):</label>
+                                        <input type="number" id="experience" name="experience" value="${tutorForm.experience}" required min="0" class="p-3 rounded-lg bg-gray-700 text-gray-200 border border-gray-600 focus:border-blue-500 focus:outline-none transition-colors" />
+                                    </div>
+                                    <div class="flex flex-col mb-4">
+                                        <label class="text-gray-300 mb-2">Specializations:</label>
+                                        <div class="flex flex-wrap gap-4">
+                                            ${['Math', 'Science', 'History', 'English', 'Computer Science', 'Physics'].map(subject => `
+                                                <label class="flex items-center space-x-2 text-gray-200">
+                                                    <input type="checkbox" name="specializations" value="${subject}" ${tutorForm.specializations.includes(subject) ? 'checked' : ''} class="form-checkbox h-5 w-5 text-blue-600 bg-gray-700 border-gray-600 rounded" />
+                                                    <span>${subject}</span>
+                                                </label>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                    <div class="flex flex-col mb-4">
+                                        <label class="text-gray-300 mb-2">I am an expert for:</label>
+                                        <div class="flex flex-wrap gap-4">
+                                            ${['School Students', 'College Students'].map(grade => `
+                                                <label class="flex items-center space-x-2 text-gray-200">
+                                                    <input type="checkbox" name="applicableGrades" value="${grade}" ${tutorForm.applicableGrades.includes(grade) ? 'checked' : ''} class="form-checkbox h-5 w-5 text-blue-600 bg-gray-700 border-gray-600 rounded" />
+                                                    <span>${grade}</span>
+                                                </label>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                    <div class="flex flex-col mb-6">
+                                        <label class="text-gray-300 mb-2">Pricing (Monthly):</label>
+                                        <input type="number" name="rate_inr_monthly" value="${tutorForm.rate_inr_monthly}" placeholder="Enter your monthly rate in ₹" required min="0" class="p-3 rounded-lg bg-gray-700 text-gray-200 border border-gray-600 focus:border-blue-500 focus:outline-none transition-colors" />
+                                    </div>
+                                    <button type="submit" class="w-full bg-green-500 text-white font-bold py-3 rounded-lg hover:bg-green-600 transition-colors duration-300" ${isLoading ? 'disabled' : ''}>
+                                        ${isLoading ? 'Submitting...' : 'Submit Profile'}
+                                    </button>
+                                </form>
+                                <button id="logout-btn" class="w-full bg-red-600 text-white font-bold py-3 rounded-lg hover:bg-red-500 transition-colors duration-300 mt-4">
+                                    Log Out
+                                </button>
+                            </div>
+                        `;
+                    } else if (userRole === 'tutor' && isTutorProfileComplete) {
+                        // Tutor's Student Search Results Page
+                        contentHTML = `
+                            <div class="w-full max-w-4xl mx-auto space-y-6">
+                                <h2 class="text-3xl font-bold mb-4">Potential Students</h2>
+                                <p class="text-gray-400">These students are looking for help with your specializations.</p>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    ${studentListForTutor.map(student => `
+                                        <div class="bg-gray-700 rounded-xl p-6 shadow-lg transition-transform transform hover:scale-105">
+                                            <h3 class="text-xl font-semibold text-blue-300">${student.name}</h3>
+                                            <p class="text-sm text-gray-400 mt-1">Contact: ${student.contactNumber}</p>
+                                            <p class="text-sm text-gray-400">Educational Status: ${student.educationalStatus === 'school' ? 'School Student' : 'College Student'}</p>
+                                            <p class="text-gray-200 mt-4">${student.studyHelp}</p>
+                                            <div class="flex justify-end mt-4">
+                                                <button class="bg-blue-500 text-white px-4 py-2 rounded-full text-sm font-semibold hover:bg-blue-600 transition-colors duration-300">
+                                                    Contact Student
+                                                </button>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                                <button id="logout-btn" class="w-full bg-red-600 text-white font-bold py-3 rounded-lg hover:bg-red-500 transition-colors duration-300 mt-4">
+                                    Log Out
+                                </button>
+                            </div>
+                        `;
+                    } else if (userRole === 'student' && !isStudentProfileComplete) {
+                        // Student Profile Form (pre-fetch)
+                        contentHTML = `
+                            <div class="w-full max-w-2xl mx-auto space-y-6">
+                                <h2 class="text-3xl font-bold mb-4">Student Profile</h2>
+                                <p class="text-gray-400">Tell us a little about yourself to find the right tutor.</p>
+                                <form id="profile-form">
+                                    <div class="flex flex-col mb-4">
+                                        <label for="name" class="text-gray-300 mb-2">Your Full Name:</label>
+                                        <input type="text" id="name" name="name" value="${studentForm.name}" required class="p-3 rounded-lg bg-gray-700 text-gray-200 border border-gray-600 focus:border-blue-500 focus:outline-none transition-colors" />
+                                    </div>
+                                    <div class="flex flex-col mb-4">
+                                        <label for="contactNumber" class="text-gray-300 mb-2">Contact Number:</label>
+                                        <input type="tel" id="contactNumber" name="contactNumber" value="${studentForm.contactNumber}" required class="p-3 rounded-lg bg-gray-700 text-gray-200 border border-gray-600 focus:border-blue-500 focus:outline-none transition-colors" />
+                                    </div>
+                                    <div class="flex flex-col mb-4">
+                                        <label for="educationalStatus" class="text-gray-300 mb-2">I am a:</label>
+                                        <select id="educationalStatus" name="educationalStatus" class="p-3 rounded-lg bg-gray-700 text-gray-200 border border-gray-600 focus:border-blue-500 focus:outline-none transition-colors">
+                                            <option value="school" ${studentForm.educationalStatus === 'school' ? 'selected' : ''}>School Student</option>
+                                            <option value="college" ${studentForm.educationalStatus === 'college' ? 'selected' : ''}>College Student</option>
+                                        </select>
+                                    </div>
+                                    <div class="flex flex-col mb-4">
+                                        <label for="studyHelp" class="text-gray-300 mb-2">What study help are you looking for?</label>
+                                        <textarea id="studyHelp" name="studyHelp" required rows="4" placeholder="e.g., help with Calculus homework, a tutor for AP Physics, etc." class="p-3 rounded-lg bg-gray-700 text-gray-200 border border-gray-600 focus:border-blue-500 focus:outline-none transition-colors">${studentForm.studyHelp}</textarea>
+                                    </div>
+                                    <div class="flex flex-col mb-6">
+                                        <label class="text-gray-300 mb-2">How do you prefer the sessions?</label>
+                                        <div class="flex items-center space-x-4">
+                                            <label class="flex items-center text-gray-200">
+                                                <input type="radio" name="sessionPreference" value="online" ${studentForm.sessionPreference === 'online' ? 'checked' : ''} class="form-radio h-5 w-5 text-blue-600 bg-gray-700 border-gray-600" />
+                                                <span class="ml-2">Online</span>
+                                            </label>
+                                            <label class="flex items-center text-gray-200">
+                                                <input type="radio" name="sessionPreference" value="offline" ${studentForm.sessionPreference === 'offline' ? 'checked' : ''} class="form-radio h-5 w-5 text-blue-600 bg-gray-700 border-gray-600" />
+                                                <span class="ml-2">Offline</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    ${studentForm.sessionPreference === 'offline' ? `
+                                    <div class="flex flex-col mb-6">
+                                        <label for="location" class="text-gray-300 mb-2">Your Location:</label>
+                                        <input type="text" id="location" name="location" value="${studentForm.location}" placeholder="e.g., City, State or Zip Code" required class="p-3 rounded-lg bg-gray-700 text-gray-200 border border-gray-600 focus:border-blue-500 focus:outline-none transition-colors" />
+                                    </div>
+                                    ` : ''}
+                                    <button type="submit" class="w-full bg-green-500 text-white font-bold py-3 rounded-lg hover:bg-green-600 transition-colors duration-300" ${isLoading ? 'disabled' : ''}>
+                                        ${isLoading ? 'Submitting...' : 'Submit Profile'}
+                                    </button>
+                                </form>
+                                <button id="logout-btn" class="w-full bg-red-600 text-white font-bold py-3 rounded-lg hover:bg-red-500 transition-colors duration-300 mt-4">
+                                    Log Out
+                                </button>
+                            </div>
+                        `;
+                    } else if (userRole === 'student' && isStudentProfileComplete && !selectedTutor) {
+                        // Student's Tutor Search Results Page
+                        contentHTML = `
+                            <div class="w-full max-w-4xl mx-auto space-y-6">
+                                <h2 class="text-3xl font-bold mb-4">Find Your Tutor</h2>
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    ${tutorList.map(tutor => `
+                                        <div class="bg-gray-700 rounded-xl p-6 shadow-lg transition-transform transform hover:scale-105">
+                                            <h3 class="text-xl font-semibold text-blue-300">${tutor.name}</h3>
+                                            <p class="text-sm text-gray-400 mt-1">Specializes in: ${tutor.specializations.join(', ')}</p>
+                                            <p class="text-sm text-gray-400">Experience: ${tutor.experience} years</p>
+                                            <div class="flex items-center justify-between mt-4">
+                                                <p class="text-lg font-bold text-green-400">₹${tutor.rate_inr_monthly}/month</p>
+                                                <button class="select-tutor-btn bg-blue-500 text-white px-4 py-2 rounded-full text-sm font-semibold hover:bg-blue-600 transition-colors duration-300" data-tutor-id="${tutor.id}">
+                                                    Select
+                                                </button>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                                <button id="back-to-profile-btn" class="w-full bg-gray-600 text-white font-bold py-3 rounded-lg hover:bg-gray-500 transition-colors duration-300 mt-8">
+                                    Back to Profile Form
+                                </button>
+                                <button id="logout-btn" class="w-full bg-red-600 text-white font-bold py-3 rounded-lg hover:bg-red-500 transition-colors duration-300 mt-4">
+                                    Log Out
+                                </button>
+                            </div>
+                        `;
+                    } else if (userRole === 'student' && isStudentProfileComplete && selectedTutor) {
+                        // NEW PAGE: Tutor Profile and Chat
+                        contentHTML = `
+                            <div class="w-full max-w-2xl mx-auto space-y-6">
+                                <div class="bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-700">
+                                    <h2 class="text-3xl font-bold text-center mb-2">${selectedTutor.name}</h2>
+                                    <p class="text-blue-400 text-center mb-4">Tutor Profile</p>
+                                    <div class="space-y-4 text-gray-300">
+                                        <p class="text-lg leading-relaxed text-center">${selectedTutor.bio}</p>
+                                        <div class="bg-gray-700 p-4 rounded-lg">
+                                            <p><strong>Experience:</strong> ${selectedTutor.experience} years</p>
+                                            <p><strong>Specializations:</strong> ${selectedTutor.specializations.join(', ')}</p>
+                                            <p><strong>Rates:</strong> ₹${selectedTutor.rate_inr_monthly}/month</p>
+                                            <p><strong>Contact:</strong> ${selectedTutor.contactNumber}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Mock Chat Interface -->
+                                <div class="bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-700 mt-8">
+                                    <h3 class="text-xl font-bold mb-4">Chat with ${selectedTutor.name}</h3>
+                                    <div id="chat-box" class="chat-box bg-gray-900 p-4 rounded-lg space-y-4 mb-4">
+                                        ${chatMessages.map(msg => `
+                                            <div class="flex ${msg.sender === 'student' ? 'justify-end' : 'justify-start'}">
+                                                <div class="rounded-xl px-4 py-2 max-w-[80%] ${msg.sender === 'student' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-200'}">
+                                                    ${msg.text}
+                                                </div>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                    <form id="chat-form" class="flex items-center space-x-2">
+                                        <input type="text" id="chat-input" placeholder="Type a message..." required class="flex-grow p-3 rounded-lg bg-gray-700 text-gray-200 border border-gray-600 focus:border-blue-500 focus:outline-none transition-colors" />
+                                        <button type="submit" class="bg-green-500 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-600 transition-colors duration-300">Send</button>
+                                    </form>
+                                </div>
+                                
+                                <button id="back-to-tutors-btn" class="w-full bg-gray-600 text-white font-bold py-3 rounded-lg hover:bg-gray-500 transition-colors duration-300 mt-4">
+                                    Back to Tutors
+                                </button>
+                                <button id="logout-btn" class="w-full bg-red-600 text-white font-bold py-3 rounded-lg hover:bg-red-500 transition-colors duration-300 mt-4">
+                                    Log Out
+                                </button>
+                            </div>
+                        `;
+                    }
+                }
+
+                // Main UI container that wraps all content
+                const mainContainer = document.createElement('div');
+                mainContainer.className = "bg-gray-800 p-8 md:p-12 rounded-2xl shadow-2xl w-full max-w-4xl transform transition-transform duration-500 scale-100";
+                mainContainer.innerHTML = `
+                    <div class="text-center mb-8">
+                        <h1 class="text-5xl md:text-6xl font-extrabold text-blue-400">🧑‍🏫 TutorLink 🎓</h1>
+                        <p class="text-lg text-gray-400 mt-2">Connecting Tutors and Students</p>
+                    </div>
+                    ${contentHTML}
+                    ${errorMessage ? `<div class="mt-8 p-4 bg-red-500 rounded-lg text-white font-semibold text-center">${errorMessage}</div>` : ''}
+                `;
+                root.appendChild(mainContainer);
+                
+                // Now that the new content is in the DOM, attach listeners to the elements.
+                attachListeners();
+            };
+
+            // --- Event Listeners ---
+            const attachListeners = () => {
+                const studentBtn = document.getElementById('student-btn');
+                if (studentBtn) {
+                    studentBtn.addEventListener('click', () => {
+                        userRole = 'student';
+                        saveState(); 
+                        render();
+                    });
+                }
+
+                const tutorBtn = document.getElementById('tutor-btn');
+                if (tutorBtn) {
+                    tutorBtn.addEventListener('click', () => {
+                        userRole = 'tutor';
+                        saveState(); 
+                        render();
+                    });
+                }
+
+                const toggleAuthBtn = document.getElementById('toggle-auth-btn');
+                if (toggleAuthBtn) {
+                    toggleAuthBtn.addEventListener('click', () => {
+                        isLogin = !isLogin;
+                        render();
+                    });
+                }
+
+                const authForm = document.getElementById('auth-form');
+                if (authForm) {
+                    authForm.addEventListener('submit', (e) => {
+                        e.preventDefault();
+                        isLoading = true;
+                        render();
+                        setTimeout(() => {
+                            isLoading = false;
+                            isAuth = true;
+                            // Reset profile complete flags on new login/signup
+                            isTutorProfileComplete = false;
+                            isStudentProfileComplete = false;
+                            saveState(); 
+                            render();
+                        }, 1000);
+                    });
+                }
+
+                const profileForm = document.getElementById('profile-form');
+                if (profileForm) {
+                    profileForm.addEventListener('change', (e) => {
+                        const { name, value, type, checked } = e.target;
+                        if (userRole === 'tutor') {
+                            if (type === 'checkbox') {
+                                if (checked) {
+                                    tutorForm[name].push(value);
+                                } else {
+                                    tutorForm[name] = tutorForm[name].filter(item => item !== value);
+                                }
+                            } else {
+                                tutorForm[name] = value;
+                            }
+                        } else if (userRole === 'student') {
+                            studentForm[name] = value;
+                            // If the session preference changes, re-render to show/hide the location field
+                            if (name === 'sessionPreference') {
+                                render();
+                            }
+                        }
+                    });
+                    
+                    profileForm.addEventListener('submit', async (e) => {
+                        e.preventDefault();
+                        
+                        // Validate form before submission
+                        if (userRole === 'tutor' && (!tutorForm.experience || tutorForm.specializations.length === 0 || !tutorForm.rate_inr_monthly)) {
+                            errorMessage = 'Please fill out all required fields.';
+                            render();
+                            return;
+                        }
+                        if (userRole === 'student' && (!studentForm.studyHelp)) {
+                            errorMessage = 'Please describe the study help you need.';
+                            render();
+                            return;
+                        }
+                        
+                        let registrationSuccessful = false;
+                        if (userRole === 'tutor') {
+                            registrationSuccessful = await registerProfile('tutor', tutorForm);
+                            if (registrationSuccessful) {
+                                isTutorProfileComplete = true;
+                                saveState();
+                                await fetchStudentDataForTutor(tutorForm.specializations);
+                            }
+                        } else if (userRole === 'student') {
+                            registrationSuccessful = await registerProfile('student', studentForm);
+                            if (registrationSuccessful) {
+                                isStudentProfileComplete = true;
+                                saveState();
+                                const studentStatus = studentForm.educationalStatus === 'school' ? 'school' : 'college';
+                                await fetchTutorData(studentStatus);
+                            }
+                        }
+                        
+                        render();
+                    });
+                }
+
+                // NEW: Listeners for the "Select Tutor" buttons
+                const selectTutorButtons = document.querySelectorAll('.select-tutor-btn');
+                selectTutorButtons.forEach(button => {
+                    button.addEventListener('click', (e) => {
+                        const tutorId = e.target.dataset.tutorId;
+                        selectedTutor = tutorList.find(t => t.id === tutorId);
+                        chatMessages = [
+                            { sender: 'tutor', text: `Hi there! I'm ${selectedTutor.name}. How can I help you with your studies?` }
+                        ];
+                        render();
+                    });
+                });
+                
+                // NEW: Listener for the chat form
+                const chatForm = document.getElementById('chat-form');
+                if (chatForm) {
+                    chatForm.addEventListener('submit', (e) => {
+                        e.preventDefault();
+                        const chatInput = document.getElementById('chat-input');
+                        const messageText = chatInput.value.trim();
+                        if (messageText) {
+                            // Add student's message
+                            chatMessages.push({ sender: 'student', text: messageText });
+                            chatInput.value = ''; // Clear the input
+
+                            // Simulate a mock response from the tutor
+                            setTimeout(() => {
+                                chatMessages.push({ sender: 'tutor', text: `Thank you for your message! I'm checking my availability for sessions and will get back to you shortly.` });
+                                render(); // Re-render to show the new messages
+                                // Scroll to the bottom of the chatbox
+                                const chatBox = document.getElementById('chat-box');
+                                if (chatBox) {
+                                    chatBox.scrollTop = chatBox.scrollHeight;
+                                }
+                            }, 1500); // 1.5 second delay for a "real" feel
+
+                            render(); // Re-render immediately to show the user's message
+                             // Scroll to the bottom of the chatbox
+                            const chatBox = document.getElementById('chat-box');
+                            if (chatBox) {
+                                chatBox.scrollTop = chatBox.scrollHeight;
+                            }
+                        }
+                    });
+                }
+                
+                // NEW: Listener for the "Back to Tutors" button
+                const backToTutorsBtn = document.getElementById('back-to-tutors-btn');
+                if (backToTutorsBtn) {
+                    backToTutorsBtn.addEventListener('click', () => {
+                        selectedTutor = null; // Clear the selected tutor
+                        chatMessages = []; // Clear chat messages
+                        render();
+                    });
+                }
+
+                const logoutBtn = document.getElementById('logout-btn');
+                if (logoutBtn) {
+                    logoutBtn.addEventListener('click', () => {
+                        isAuth = false;
+                        userRole = null;
+                        isTutorProfileComplete = false;
+                        isStudentProfileComplete = false;
+                        tutorList = []; 
+                        studentListForTutor = [];
+                        selectedTutor = null; // Clear selected tutor
+                        chatMessages = []; // Clear chat messages
+                        localStorage.clear(); 
+                        render();
+                    });
+                }
+                
+                const backToProfileBtn = document.getElementById('back-to-profile-btn');
+                if (backToProfileBtn) {
+                    backToProfileBtn.addEventListener('click', () => {
+                        tutorList = []; 
+                        studentListForTutor = [];
+                        render();
+                    });
+                }
+            };
+            
+            // Start the application by loading state and rendering the initial UI
+            loadState();
+            
+            // If a user is already authenticated and has a role, immediately fetch data
+            // based on the stored profile information.
+            if (isAuth) {
+                if (userRole === 'tutor' && isTutorProfileComplete) {
+                     fetchStudentDataForTutor(tutorForm.specializations); 
+                } else if (userRole === 'student' && isStudentProfileComplete) {
+                    fetchTutorData(studentForm.educationalStatus);
+                }
+            }
+            
+            // Initial render of the application
+            render();
+        });
+    </script>
+</body>
+</html>
